@@ -1,21 +1,10 @@
 # Ayuda del proyecto «multiplicaciones»
 
-Genera una hoja en PDF con 10 problemas de multiplicar con temática de perros
-y, al final, una tabla de multiplicar resuelta para memorizar. La hoja se
-puede enviar por correo y también se puede generar desde una página web.
+Referencia técnica: qué hace cada fichero, cada constante y cada función.
+Para saber qué es el proyecto, cómo se instala y cómo se usa, mira el
+**[README.md](README.md)**.
 
-## Cómo se usa
-
-```bash
-env/bin/python multiplicaciones.py                 # todas las tablas (2..9)
-env/bin/python multiplicaciones.py 3 6 9           # solo las tablas 3, 6 y 9 en los problemas
-env/bin/python multiplicaciones.py 3 6 9 -o x.pdf  # elegir el nombre del PDF
-env/bin/python multiplicaciones.py -e a@x.com      # además, enviarlo por correo (-e se puede repetir)
-env/bin/python multiplicaciones.py 3 6 -e          # -e sin dirección: a los DESTINATARIOS del fichero .env
-env/bin/python servidor.py [-p PUERTO]             # página web con el botón «Generar» (puerto 8000)
-```
-
-Las tablas que pasas como argumento solo deciden qué multiplicaciones salen
+Las tablas que se pasan como argumento solo deciden qué multiplicaciones salen
 en los problemas. La tabla de referencia del final no se puede elegir: sale
 al azar (ver `elegir_tabla`).
 
@@ -180,4 +169,6 @@ tiene un botón «Generar». Al pulsarlo, se crea la hoja y se envía por correo
 | `.env.ejemplo` | Plantilla del `.env`, sin datos reales. Sí se sube a git. |
 | `.gitignore` | Lo que git no sincroniza: `.env`, `env/`, `__pycache__/`, y los PDF. |
 | `.dockerignore` | Lo que no se envía a Docker al construir la imagen. |
+| `README.md` | Portada del repositorio: qué es, instalación, uso y licencias. |
+| `docs/ejemplo.png` | Captura de una hoja de ejemplo que aparece en el README. Hay que regenerarla a mano si cambia mucho el aspecto de la hoja. |
 | `CLAUDE.md` | Notas técnicas del proyecto para Claude Code. |

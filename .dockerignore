@@ -9,3 +9,6 @@ CLAUDE.md
 .gitignore
 AYUDA.md
 tablas_salidas.json
+.vscode
+README.md
+docs/
