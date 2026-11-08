@@ -1,11 +1,14 @@
 """Envío del PDF por correo a través de un servidor SMTP (p. ej. Brevo).
 
 Los datos de la cuenta (usuario, contraseña, remitente y destinatarios) NO
-están en este fichero: se leen del fichero `.env` de la carpeta del
-proyecto, que no se sube a git. Para crearlo en un ordenador nuevo, copia
-`.env.ejemplo` como `.env` y rellénalo (o copia el `.env` de otro ordenador).
-Si una variable ya existe en el entorno (por ejemplo en Docker, con
-`env_file` en docker-compose.yml), tiene prioridad sobre el `.env`.
+están en este fichero: se leen de un fichero con formato `.env`, que no se
+sube a git. Se busca en este orden:
+  1. /run/secrets/multiplicaciones_env: en Docker, el secreto
+     `multiplicaciones_env` (ver docker-compose.yml).
+  2. El `.env` de la carpeta del proyecto: al ejecutarlo fuera de Docker.
+     Para crearlo en un ordenador nuevo, copia `.env.ejemplo` como `.env`
+     y rellénalo (o copia el `.env` de otro ordenador).
+Si una variable ya existe en el entorno, tiene prioridad sobre el fichero.
 
 En Brevo los datos están en "SMTP & API" -> pestaña "SMTP":
   - servidor: smtp-relay.brevo.com
@@ -24,16 +27,25 @@ from email.message import EmailMessage
 from email.utils import formataddr
 from pathlib import Path
 
-FICHERO_ENV = Path(__file__).resolve().parent / ".env"
+# Dónde se buscan los datos privados del correo: primero el secreto de
+# Docker y, si no existe (fuera de Docker), el .env del proyecto.
+RUTA_SECRETO = Path("/run/secrets/multiplicaciones_env")
+RUTA_ENV_PROYECTO = Path(__file__).resolve().parent / ".env"
+FICHERO_ENV = RUTA_SECRETO if RUTA_SECRETO.exists() else RUTA_ENV_PROYECTO
 
 
 def cargar_env(ruta=FICHERO_ENV):
     """Lee las líneas CLAVE=valor del fichero `.env` y las pone en el entorno.
 
     Ignora las líneas vacías y las que empiezan por '#'. No pisa variables
-    que ya existan en el entorno. Si el fichero no existe, no hace nada.
+    que ya existan en el entorno. Si el fichero no existe, no hace nada
+    (comprobar_configuracion avisará de los datos que falten); si existe
+    pero no se puede leer, avisa.
     """
     if not ruta.exists():
+        return
+    if not os.access(ruta, os.R_OK):
+        print(f"Aviso: no hay permiso para leer {ruta}", file=sys.stderr)
         return
     for linea in ruta.read_text(encoding="utf-8").splitlines():
         linea = linea.strip()
@@ -103,7 +115,8 @@ def comprobar_configuracion():
     ]
     if faltan:
         sys.exit(
-            f"Falta configurar {', '.join(faltan)} en el fichero .env (ver .env.ejemplo)."
+            f"Falta configurar {', '.join(faltan)}: no están en {FICHERO_ENV} "
+            "(ver .env.ejemplo)."
         )
     if SEGURIDAD not in ("tls", "ssl"):
         sys.exit(f'SEGURIDAD debe ser "tls" o "ssl", no "{SEGURIDAD}".')

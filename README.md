@@ -61,8 +61,12 @@ antes de poder generar otra, para no mandar correos repetidos por error.
 docker compose up -d --build        # servidor web en el puerto 8000
 ```
 
-El contenedor lee el `.env` al arrancar, así que la contraseña no queda
-dentro de la imagen. Los PDF se guardan dentro del contenedor, en
+El `.env` se pasa al contenedor como **secreto de Docker**
+(`multiplicaciones_env`), así que la contraseña no queda dentro de la imagen
+ni aparece en `docker inspect`. El fichero tiene que poder leerlo el usuario
+1000, que es con el que corre el contenedor. En Portainer, en `file:` del
+secreto va la ruta absoluta del fichero en el servidor, que puede tener
+cualquier nombre. Los PDF se guardan dentro del contenedor, en
 `/app/pdfs`, y se pierden al recrearlo.
 
 ## Sincronizar entre ordenadores

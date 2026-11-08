@@ -6,8 +6,17 @@ services:
     restart: unless-stopped
     user: "1000:1000"         # usuario sin privilegios (no root) con el que corre el contenedor
     init: true                # para que "docker stop" pare el servidor al momento
-    env_file: .env            # datos privados del correo (contraseña SMTP); no van en la imagen
     environment:
       TZ: Europe/Madrid       # zona horaria para los nombres de los PDF
+    secrets:
+      - multiplicaciones_env  # el programa lo lee en /run/secrets/multiplicaciones_env
     ports:
       - "8000:8000"           # Nginx Proxy Manager apunta a <IP del host>:8000
+
+# Datos privados del correo (contraseña SMTP), con el formato de .env.ejemplo.
+# No van en la imagen: Docker monta el fichero en el contenedor al arrancar.
+# Debe poder leerlo el usuario 1000 (el del contenedor). En Portainer, pon
+# aquí la ruta absoluta del fichero en el servidor.
+secrets:
+  multiplicaciones_env:
+    file: ./.env

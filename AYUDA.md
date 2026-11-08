@@ -122,15 +122,21 @@ basta con añadir entradas aquí.
 
 Envía el PDF por correo (SMTP de Brevo). Los datos privados (servidor,
 puerto, tipo de seguridad, usuario, contraseña, remitente y `DESTINATARIOS`
-por defecto) **no están en el código**: se leen del fichero `.env` de la
-carpeta del proyecto, que no se sube a git. En un ordenador nuevo hay que
-copiar el `.env` de otro ordenador, o copiar `.env.ejemplo` como `.env` y
-rellenarlo. Si una variable ya existe en el entorno (por ejemplo en Docker),
-tiene prioridad sobre el `.env`.
+por defecto) **no están en el código**: se leen de un fichero con el formato
+de `.env.ejemplo`, que no se sube a git. Se busca en este orden:
+
+1. `/run/secrets/multiplicaciones_env`: en Docker, el secreto
+   `multiplicaciones_env` (ver `docker-compose.yml`).
+2. El `.env` de la carpeta del proyecto: al ejecutarlo fuera de Docker. En
+   un ordenador nuevo hay que copiar el `.env` de otro ordenador, o copiar
+   `.env.ejemplo` como `.env` y rellenarlo.
+
+Si una variable ya existe en el entorno, tiene prioridad sobre el fichero.
 
 | Función | Qué hace |
 |---|---|
-| `cargar_env(ruta)` | Lee las líneas `CLAVE=valor` del `.env` y las pasa a variables de entorno, sin pisar las que ya existan. Se ejecuta al importar el módulo. Si el `.env` no existe, no hace nada. |
+| `RUTA_SECRETO`, `RUTA_ENV_PROYECTO`, `FICHERO_ENV` | Las dos rutas donde se buscan los datos privados y la que se usa: el secreto de Docker si existe y, si no, el `.env` del proyecto. |
+| `cargar_env(ruta)` | Lee las líneas `CLAVE=valor` del `.env` y las pasa a variables de entorno, sin pisar las que ya existan. Se ejecuta al importar el módulo. Si el fichero no existe, no hace nada (`comprobar_configuracion` avisará de lo que falte); si existe pero no se puede leer, avisa. |
 | `crear_mensaje(destinatarios, asunto, texto, ruta_pdf)` | Construye el correo con remitente, destinatarios, asunto y texto, y el PDF adjunto. |
 | `comprobar_configuracion()` | Comprueba que estén rellenos los datos del servidor, el usuario, la contraseña y el remitente, y que `SEGURIDAD` sea `"tls"` o `"ssl"`. Si falta algo, termina con un mensaje claro. |
 | `enviar_pdf(destinatarios, asunto, texto, ruta_pdf)` | Envía el correo. Si no se indican destinatarios, usa `DESTINATARIOS`. Se conecta con SSL o STARTTLS según `SEGURIDAD` y avisa si falla la contraseña o la conexión. |
@@ -161,7 +167,7 @@ tiene un botón «Generar». Al pulsarlo, se crea la hoja y se envía por correo
 | Fichero | Qué es |
 |---|---|
 | `index.html` | La página web con el botón «Generar» y la cuenta atrás. |
-| `Dockerfile`, `docker-compose.yml` | Sirven para ejecutar el servidor en Docker (`docker compose up -d --build`, puerto 8000). Los PDF y `tablas_salidas.json` se guardan en `/app/pdfs`, dentro del contenedor, y se pierden al recrearlo. La contraseña no va en la imagen: `docker-compose.yml` pasa el `.env` al contenedor al arrancar. |
+| `Dockerfile`, `docker-compose.yml` | Sirven para ejecutar el servidor en Docker (`docker compose up -d --build`, puerto 8000). Los PDF y `tablas_salidas.json` se guardan en `/app/pdfs`, dentro del contenedor, y se pierden al recrearlo. La contraseña no va en la imagen: `docker-compose.yml` monta el `.env` como secreto de Docker (`multiplicaciones_env`) al arrancar, y tampoco aparece en las variables del contenedor. |
 | `fonts/` | Fuente `Fredoka-SemiBold.ttf` y su licencia `OFL-Fredoka.txt`. Es una fuente libre (SIL Open Font License), así que se puede subir a git y redistribuir siempre que vaya acompañada de su licencia. Es una versión estática (peso 600) creada a partir de la fuente variable de Google Fonts. |
 | `emojis/` | Imágenes PNG de Twemoji (licencia CC-BY 4.0). |
 | `tablas_salidas.json` | Se crea solo. Guarda las tablas de referencia que ya han salido en la ronda actual. Si lo borras, empieza una ronda nueva. Se sincroniza con git a propósito, para compartir la rotación entre ordenadores. |
