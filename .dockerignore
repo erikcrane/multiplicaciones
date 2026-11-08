@@ -1,0 +1,11 @@
+env/
+__pycache__/
+pdfs/
+*.pdf
+.git/
+CLAUDE.md
+.env
+.env.ejemplo
+.gitignore
+AYUDA.md
+tablas_salidas.json

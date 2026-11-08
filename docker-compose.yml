@@ -1,0 +1,13 @@
+services:
+  multiplicaciones:
+    build: .
+    image: multiplicaciones:local
+    container_name: multiplicaciones
+    restart: unless-stopped
+    user: "1000:1000"         # usuario sin privilegios (no root) con el que corre el contenedor
+    init: true                # para que "docker stop" pare el servidor al momento
+    env_file: .env            # datos privados del correo (contraseña SMTP); no van en la imagen
+    environment:
+      TZ: Europe/Madrid       # zona horaria para los nombres de los PDF
+    ports:
+      - "8000:8000"           # Nginx Proxy Manager apunta a <IP del host>:8000

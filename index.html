@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Multiplicaciones</title>
+<style>
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    height: 100%;
+  }
+
+  body {
+    background: #f5f5f0;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    color: #333;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1.5rem;
+    padding: 1rem;
+  }
+
+  #generar {
+    /* ===== MEDIDAS DEL BOTÓN: cámbialas aquí ===== */
+    width: 80vw;          /* ancho: 80 % del ancho de la pantalla... */
+    max-width: 400px;     /* ...pero nunca más de 400 px */
+    height: 120px;        /* alto */
+    font-size: 2rem;      /* tamaño del texto */
+    border-radius: 16px;  /* redondeo de las esquinas */
+    /* ============================================= */
+
+    background: #333;
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    letter-spacing: 0.05em;
+    transition: background 0.15s, transform 0.1s;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  #generar:hover   { background: #555; }
+  #generar:active  { transform: scale(0.97); }
+  #generar:disabled {
+    background: #999;
+    cursor: wait;
+  }
+
+  #estado {
+    min-height: 1.5em;
+    font-size: 1.1rem;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+  <button id="generar" type="button">Generar</button>
+  <p id="estado"></p>
+
+<script>
+  const boton = document.getElementById("generar");
+  const estado = document.getElementById("estado");
+
+  // Deja el botón desactivado mostrando una cuenta atrás de `segundos`.
+  // La duración de la espera se configura en servidor.py (ESPERA_SEGUNDOS).
+  function cuentaAtras(segundos) {
+    if (segundos <= 0) {
+      boton.textContent = "Generar";
+      boton.disabled = false;
+      return;
+    }
+    boton.disabled = true;
+    boton.textContent = segundos + " s";
+    setTimeout(() => cuentaAtras(segundos - 1), 1000);
+  }
+
+  boton.addEventListener("click", async () => {
+    boton.disabled = true;
+    estado.textContent = "Generando y enviando…";
+    let espera = 0;
+    try {
+      const respuesta = await fetch("/generar", { method: "POST" });
+      const datos = await respuesta.json();
+      estado.textContent = datos.mensaje;
+      espera = datos.espera || 0;
+    } catch (error) {
+      estado.textContent = "No se pudo contactar con el servidor.";
+    }
+    cuentaAtras(espera);
+  });
+</script>
+</body>
+</html>

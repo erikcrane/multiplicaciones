@@ -1,0 +1,13 @@
+# Configuración privada del correo (contraseña SMTP). Plantilla: .env.ejemplo
+.env
+
+# Entorno virtual: cada ordenador crea el suyo
+#   uv venv env && uv pip install --python env/bin/python reportlab
+env/
+__pycache__/
+
+# PDF generados
+*.pdf
+
+# tablas_salidas.json SÍ se sincroniza, a propósito (rotación de la tabla
+# de referencia compartida entre ordenadores).
