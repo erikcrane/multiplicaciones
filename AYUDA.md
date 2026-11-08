@@ -50,7 +50,7 @@ multiplicaciones «en bruto», es decir, los números y no el texto.
 | `guardar_tablas_salidas(salidas)` | Guarda esa lista en `tablas_salidas.json`. |
 | `elegir_tabla()` | Elige al azar la tabla de referencia del final de la hoja, solo entre las que aún no han salido. Cuando han salido las 8, empieza una ronda nueva, y la primera tabla de esa ronda nunca es la última que salió. Devuelve `(tabla, salidas)`: la tabla elegida y la lista que hay que guardar. |
 | `parsear_tablas(valores, parser)` | Comprueba las tablas escritas en la línea de comandos. Da error si alguna no es un número entero o no está entre el 2 y el 9. Quita las repetidas y, si no se indica ninguna, devuelve todas. |
-| `main(argv=None)` | Función principal. Lee los argumentos (tablas, `-o` y `-e`) y comprueba que las direcciones de correo tengan `@`. Después valida los datos, prepara los emojis, genera las parejas, elige la tabla, crea el PDF y guarda la tabla elegida. Si se usó `-e`, envía el PDF por correo. |
+| `main(argv=None)` | Función principal. Lee los argumentos (tablas, `-o` y `-e`) y comprueba que las direcciones de correo tengan `@`. Si se usó `-e`, comprueba antes de nada los datos del correo con `preparar_envio` (si falta algo, termina sin generar nada). Después valida los datos, prepara los emojis, genera las parejas, elige la tabla, crea el PDF y guarda la tabla elegida. Si se usó `-e`, al final envía el PDF por correo. |
 
 ---
 
@@ -123,7 +123,8 @@ basta con añadir entradas aquí.
 Envía el PDF por correo (SMTP de Brevo). Los datos privados (servidor,
 puerto, tipo de seguridad, usuario, contraseña, remitente y `DESTINATARIOS`
 por defecto) **no están en el código**: se leen de un fichero con el formato
-de `.env.ejemplo`, que no se sube a git. Se busca en este orden:
+de `.env.ejemplo`, que no se sube a git. Se usa uno solo, el primero que
+exista:
 
 1. `/run/secrets/multiplicaciones_env`: en Docker, el secreto
    `multiplicaciones_env` (ver `docker-compose.yml`).
@@ -131,15 +132,27 @@ de `.env.ejemplo`, que no se sube a git. Se busca en este orden:
    un ordenador nuevo hay que copiar el `.env` de otro ordenador, o copiar
    `.env.ejemplo` como `.env` y rellenarlo.
 
-Si una variable ya existe en el entorno, tiene prioridad sobre el fichero.
+Los datos se leen **solo de ese fichero**: las variables de entorno no se
+usan ni se modifican, así que una variable que ya existiera en la terminal
+(de otro proyecto o de una prueba antigua) no puede cambiar a quién o desde
+dónde se envía el correo. Si no existe ninguno de los dos ficheros, o no se
+puede leer, el programa avisa y termina.
+
+El fichero solo se lee cuando se usa `-e`, y se hace al principio, antes de
+generar nada: si falta algo, no se crea el PDF ni se gasta una tabla de la
+rotación. Sin `-e` no hace falta tener `.env`.
 
 | Función | Qué hace |
 |---|---|
-| `RUTA_SECRETO`, `RUTA_ENV_PROYECTO`, `FICHERO_ENV` | Las dos rutas donde se buscan los datos privados y la que se usa: el secreto de Docker si existe y, si no, el `.env` del proyecto. |
-| `cargar_env(ruta)` | Lee las líneas `CLAVE=valor` del `.env` y las pasa a variables de entorno, sin pisar las que ya existan. Se ejecuta al importar el módulo. Si el fichero no existe, no hace nada (`comprobar_configuracion` avisará de lo que falte); si existe pero no se puede leer, avisa. |
-| `crear_mensaje(destinatarios, asunto, texto, ruta_pdf)` | Construye el correo con remitente, destinatarios, asunto y texto, y el PDF adjunto. |
-| `comprobar_configuracion()` | Comprueba que estén rellenos los datos del servidor, el usuario, la contraseña y el remitente, y que `SEGURIDAD` sea `"tls"` o `"ssl"`. Si falta algo, termina con un mensaje claro. |
-| `enviar_pdf(destinatarios, asunto, texto, ruta_pdf)` | Envía el correo. Si no se indican destinatarios, usa `DESTINATARIOS`. Se conecta con SSL o STARTTLS según `SEGURIDAD` y avisa si falla la contraseña o la conexión. |
+| `RUTA_SECRETO`, `RUTA_ENV_PROYECTO` | Las dos rutas donde se buscan los datos privados. |
+| `SERVIDOR_POR_DEFECTO`, `PUERTO_POR_DEFECTO`, `SEGURIDAD_POR_DEFECTO` | Valores que se usan si el fichero no indica `SERVIDOR_SMTP`, `PUERTO_SMTP` o `SEGURIDAD`. |
+| `fichero_env()` | Devuelve la ruta que se usa: el secreto de Docker si existe y, si no, el `.env` del proyecto. |
+| `cargar_env(ruta)` | Lee las líneas `CLAVE=valor` del fichero y las devuelve en un diccionario, sin tocar las variables de entorno. Ignora líneas vacías y comentarios y quita las comillas del valor. Si el fichero no existe o no se puede leer, termina con un mensaje claro. |
+| `leer_configuracion()` | Carga el fichero y devuelve la configuración del correo (servidor, puerto, seguridad, usuario, contraseña, remitente, nombre del remitente y `DESTINATARIOS`), con los valores por defecto donde falten. Termina con un mensaje claro si el puerto no es un número. |
+| `comprobar_configuracion(configuracion, ruta)` | Comprueba que estén rellenos el usuario, la contraseña y el remitente, y que `SEGURIDAD` sea `"tls"` o `"ssl"`. Si falta algo, termina con un mensaje claro. |
+| `preparar_envio(direcciones)` | Se llama desde `main` antes de generar el PDF. Lee la configuración y decide los destinatarios: las direcciones de `-e` o, si no hay, los `DESTINATARIOS` del fichero (si tampoco hay, termina). Devuelve `(configuracion, destinatarios)`. |
+| `crear_mensaje(configuracion, destinatarios, asunto, texto, ruta_pdf)` | Construye el correo con remitente, destinatarios, asunto y texto, y el PDF adjunto. |
+| `enviar_pdf(configuracion, destinatarios, asunto, texto, ruta_pdf)` | Envía el correo con lo que devolvió `preparar_envio`. Se conecta con SSL o STARTTLS según `SEGURIDAD` y avisa si falla la contraseña o la conexión. |
 
 ---
 

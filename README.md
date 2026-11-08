@@ -32,6 +32,12 @@ cp .env.ejemplo .env      # y rellénalo, o copia el .env de otro ordenador
 El `.env` contiene la contraseña, así que **no se sube a git**: hay que
 copiarlo a mano a cada ordenador.
 
+Los datos del correo se leen **solo** de este fichero (o, en Docker, del
+secreto): las variables de entorno no se usan, así que una variable con el
+mismo nombre que haya quedado en la terminal no cambia nada. Si al usar
+`-e` no se encuentra el fichero o le falta algún dato, el programa avisa y
+termina antes de generar la hoja. Sin `-e` no hace falta tener `.env`.
+
 ## Uso
 
 ```bash

@@ -2,13 +2,24 @@
 
 Los datos de la cuenta (usuario, contraseña, remitente y destinatarios) NO
 están en este fichero: se leen de un fichero con formato `.env`, que no se
-sube a git. Se busca en este orden:
+sube a git. Se usa uno solo, el primero que exista:
   1. /run/secrets/multiplicaciones_env: en Docker, el secreto
      `multiplicaciones_env` (ver docker-compose.yml).
   2. El `.env` de la carpeta del proyecto: al ejecutarlo fuera de Docker.
      Para crearlo en un ordenador nuevo, copia `.env.ejemplo` como `.env`
      y rellénalo (o copia el `.env` de otro ordenador).
-Si una variable ya existe en el entorno, tiene prioridad sobre el fichero.
+Si no existe ninguno de los dos, o no se puede leer, se avisa y el programa
+termina sin enviar nada.
+
+Los datos se leen SOLO de ese fichero: las variables de entorno no se usan
+ni se modifican. Así una variable que ya existiera en la terminal (de otro
+proyecto, de una prueba antigua...) no puede cambiar a quién o desde dónde
+se envía el correo.
+
+El fichero solo se lee cuando se va a enviar un correo (`preparar_envio`,
+al principio del programa, antes de generar el PDF, para que si falta algo
+no se haga nada), así que para generar el PDF sin enviarlo no hace falta
+tenerlo.
 
 En Brevo los datos están en "SMTP & API" -> pestaña "SMTP":
   - servidor: smtp-relay.brevo.com
@@ -19,7 +30,6 @@ La dirección de REMITENTE debe estar dada de alta como remitente verificado
 en Brevo, o el correo será rechazado.
 """
 
-import os
 import smtplib
 import ssl
 import sys
@@ -31,23 +41,38 @@ from pathlib import Path
 # Docker y, si no existe (fuera de Docker), el .env del proyecto.
 RUTA_SECRETO = Path("/run/secrets/multiplicaciones_env")
 RUTA_ENV_PROYECTO = Path(__file__).resolve().parent / ".env"
-FICHERO_ENV = RUTA_SECRETO if RUTA_SECRETO.exists() else RUTA_ENV_PROYECTO
+
+# Valores que se usan si el fichero no los indica.
+SERVIDOR_POR_DEFECTO = "smtp-relay.brevo.com"
+PUERTO_POR_DEFECTO = 465
+SEGURIDAD_POR_DEFECTO = "ssl"  # "tls" (STARTTLS, puerto 587) o "ssl" (puerto 465)
 
 
-def cargar_env(ruta=FICHERO_ENV):
-    """Lee las líneas CLAVE=valor del fichero `.env` y las pone en el entorno.
+def fichero_env():
+    """Devuelve la ruta del fichero de datos: el secreto o el .env."""
+    return RUTA_SECRETO if RUTA_SECRETO.exists() else RUTA_ENV_PROYECTO
 
-    Ignora las líneas vacías y las que empiezan por '#'. No pisa variables
-    que ya existan en el entorno. Si el fichero no existe, no hace nada
-    (comprobar_configuracion avisará de los datos que falten); si existe
-    pero no se puede leer, avisa.
+
+def cargar_env(ruta):
+    """Lee las líneas CLAVE=valor del fichero y las devuelve en un diccionario.
+
+    Ignora las líneas vacías y las que empiezan por '#', y quita las
+    comillas que rodeen el valor. No toca las variables de entorno. Si el
+    fichero no existe o no se puede leer, termina el programa con un error.
     """
     if not ruta.exists():
-        return
-    if not os.access(ruta, os.R_OK):
-        print(f"Aviso: no hay permiso para leer {ruta}", file=sys.stderr)
-        return
-    for linea in ruta.read_text(encoding="utf-8").splitlines():
+        sys.exit(
+            f"No se encuentra el fichero con los datos del correo: {ruta}\n"
+            "Crea el .env a partir de .env.ejemplo (o, en Docker, revisa el "
+            "secreto en docker-compose.yml)."
+        )
+    try:
+        contenido = ruta.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as error:
+        sys.exit(f"No se puede leer el fichero con los datos del correo {ruta}: {error}")
+
+    datos = {}
+    for linea in contenido.splitlines():
         linea = linea.strip()
         if not linea or linea.startswith("#") or "=" not in linea:
             continue
@@ -55,39 +80,74 @@ def cargar_env(ruta=FICHERO_ENV):
         valor = valor.strip()
         if len(valor) >= 2 and valor[0] == valor[-1] and valor[0] in "\"'":
             valor = valor[1:-1]
-        os.environ.setdefault(clave.strip(), valor)
+        datos[clave.strip()] = valor
+    return datos
 
 
-cargar_env()
+def leer_configuracion():
+    """Lee el fichero de datos y devuelve la configuración del correo.
 
-# ---------------------------------------------------------------------------
-# Configuración del servidor SMTP (se rellena desde el .env)
-# ---------------------------------------------------------------------------
-SERVIDOR_SMTP = os.environ.get("SERVIDOR_SMTP", "smtp-relay.brevo.com")
-PUERTO_SMTP = int(os.environ.get("PUERTO_SMTP") or 465)
-USUARIO_SMTP = os.environ.get("USUARIO_SMTP", "")
-CONTRASENA_SMTP = os.environ.get("CONTRASENA_SMTP", "")
-SEGURIDAD = os.environ.get("SEGURIDAD", "ssl")  # "tls" (STARTTLS, puerto 587) o "ssl" (puerto 465)
+    Termina el programa con un mensaje claro si falta algún dato obligatorio
+    o si alguno no es válido.
+    """
+    ruta = fichero_env()
+    datos = cargar_env(ruta)
 
-# Dirección desde la que se envía (y nombre opcional que verá el destinatario).
-REMITENTE = os.environ.get("REMITENTE", "")
-NOMBRE_REMITENTE = os.environ.get("NOMBRE_REMITENTE", "")
+    texto_puerto = datos.get("PUERTO_SMTP") or str(PUERTO_POR_DEFECTO)
+    try:
+        puerto = int(texto_puerto)
+    except ValueError:
+        sys.exit(f'PUERTO_SMTP debe ser un número, no "{texto_puerto}" (en {ruta}).')
 
-# Direcciones a las que se envía cuando se usa -e sin indicar ninguna
-# (en el .env, separadas por comas).
-DESTINATARIOS = [
-    direccion.strip()
-    for direccion in os.environ.get("DESTINATARIOS", "").split(",")
-    if direccion.strip()
-]
-# ---------------------------------------------------------------------------
+    configuracion = {
+        "servidor": datos.get("SERVIDOR_SMTP") or SERVIDOR_POR_DEFECTO,
+        "puerto": puerto,
+        "seguridad": datos.get("SEGURIDAD") or SEGURIDAD_POR_DEFECTO,
+        "usuario": datos.get("USUARIO_SMTP", ""),
+        "contrasena": datos.get("CONTRASENA_SMTP", ""),
+        # Dirección desde la que se envía y nombre opcional que verá el
+        # destinatario.
+        "remitente": datos.get("REMITENTE", ""),
+        "nombre_remitente": datos.get("NOMBRE_REMITENTE", ""),
+        # Direcciones a las que se envía cuando se usa -e sin indicar
+        # ninguna (en el fichero, separadas por comas).
+        "destinatarios": [
+            direccion.strip()
+            for direccion in datos.get("DESTINATARIOS", "").split(",")
+            if direccion.strip()
+        ],
+    }
+    comprobar_configuracion(configuracion, ruta)
+    return configuracion
 
 
-def crear_mensaje(destinatarios, asunto, texto, ruta_pdf):
+def comprobar_configuracion(configuracion, ruta):
+    """Sale con un mensaje claro si falta algún dato de la configuración."""
+    faltan = [
+        nombre
+        for nombre, clave in (
+            ("USUARIO_SMTP", "usuario"),
+            ("CONTRASENA_SMTP", "contrasena"),
+            ("REMITENTE", "remitente"),
+        )
+        if not configuracion[clave]
+    ]
+    if faltan:
+        sys.exit(
+            f"Falta configurar {', '.join(faltan)}: no están en {ruta} "
+            "(ver .env.ejemplo)."
+        )
+    if configuracion["seguridad"] not in ("tls", "ssl"):
+        sys.exit(f'SEGURIDAD debe ser "tls" o "ssl", no "{configuracion["seguridad"]}".')
+
+
+def crear_mensaje(configuracion, destinatarios, asunto, texto, ruta_pdf):
     """Construye el correo con el PDF adjunto."""
     ruta_pdf = Path(ruta_pdf)
+    remitente = configuracion["remitente"]
+    nombre = configuracion["nombre_remitente"]
     mensaje = EmailMessage()
-    mensaje["From"] = formataddr((NOMBRE_REMITENTE, REMITENTE)) if NOMBRE_REMITENTE else REMITENTE
+    mensaje["From"] = formataddr((nombre, remitente)) if nombre else remitente
     mensaje["To"] = ", ".join(destinatarios)
     mensaje["Subject"] = asunto
     mensaje.set_content(texto)
@@ -100,50 +160,41 @@ def crear_mensaje(destinatarios, asunto, texto, ruta_pdf):
     return mensaje
 
 
-def comprobar_configuracion():
-    """Sale con un mensaje claro si falta algún dato de la configuración."""
-    faltan = [
-        nombre
-        for nombre, valor in (
-            ("SERVIDOR_SMTP", SERVIDOR_SMTP),
-            ("PUERTO_SMTP", PUERTO_SMTP),
-            ("USUARIO_SMTP", USUARIO_SMTP),
-            ("CONTRASENA_SMTP", CONTRASENA_SMTP),
-            ("REMITENTE", REMITENTE),
-        )
-        if not valor
-    ]
-    if faltan:
-        sys.exit(
-            f"Falta configurar {', '.join(faltan)}: no están en {FICHERO_ENV} "
-            "(ver .env.ejemplo)."
-        )
-    if SEGURIDAD not in ("tls", "ssl"):
-        sys.exit(f'SEGURIDAD debe ser "tls" o "ssl", no "{SEGURIDAD}".')
+def preparar_envio(direcciones):
+    """Lee la configuración del correo y decide a quién se envía.
 
+    Se llama al principio del programa, antes de generar el PDF, para que
+    si falta el fichero o algún dato se corte sin haber hecho nada. Sin
+    direcciones usa los DESTINATARIOS del fichero.
 
-def enviar_pdf(destinatarios, asunto, texto, ruta_pdf):
-    """Envía el PDF por SMTP. Sin destinatarios usa los de DESTINATARIOS."""
-    comprobar_configuracion()
-    destinatarios = list(destinatarios) or list(DESTINATARIOS)
+    Devuelve (configuracion, destinatarios) para pasárselos a `enviar_pdf`.
+    """
+    configuracion = leer_configuracion()
+    destinatarios = list(direcciones) or configuracion["destinatarios"]
     if not destinatarios:
         sys.exit(
             "No hay destinatarios: indícalos con -e DIRECCION o rellena "
             "DESTINATARIOS en el fichero .env."
         )
+    return configuracion, destinatarios
 
-    mensaje = crear_mensaje(destinatarios, asunto, texto, ruta_pdf)
+
+def enviar_pdf(configuracion, destinatarios, asunto, texto, ruta_pdf):
+    """Envía el PDF por SMTP con lo que ha devuelto `preparar_envio`."""
+    mensaje = crear_mensaje(configuracion, destinatarios, asunto, texto, ruta_pdf)
     contexto = ssl.create_default_context()
+    servidor_smtp = configuracion["servidor"]
+    puerto = configuracion["puerto"]
 
     try:
-        if SEGURIDAD == "ssl":
-            servidor = smtplib.SMTP_SSL(SERVIDOR_SMTP, PUERTO_SMTP, context=contexto, timeout=30)
+        if configuracion["seguridad"] == "ssl":
+            servidor = smtplib.SMTP_SSL(servidor_smtp, puerto, context=contexto, timeout=30)
         else:
-            servidor = smtplib.SMTP(SERVIDOR_SMTP, PUERTO_SMTP, timeout=30)
+            servidor = smtplib.SMTP(servidor_smtp, puerto, timeout=30)
         with servidor:
-            if SEGURIDAD == "tls":
+            if configuracion["seguridad"] == "tls":
                 servidor.starttls(context=contexto)
-            servidor.login(USUARIO_SMTP, CONTRASENA_SMTP)
+            servidor.login(configuracion["usuario"], configuracion["contrasena"])
             servidor.send_message(mensaje)
     except smtplib.SMTPAuthenticationError:
         sys.exit("El servidor SMTP ha rechazado el usuario o la contraseña.")

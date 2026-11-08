@@ -21,7 +21,7 @@ import json
 import random
 from pathlib import Path
 
-from enviar_email import enviar_pdf
+from enviar_email import enviar_pdf, preparar_envio
 from generacion_pdf import (
     mostrar_salida,
     nombre_pdf_automatico,
@@ -182,7 +182,7 @@ def main(argv=None):
         metavar="DIRECCION",
         help=(
             "envía el PDF por correo a esta dirección (se puede repetir); "
-            "sin dirección, a los DESTINATARIOS de enviar_email.py"
+            "sin dirección, a los DESTINATARIOS del fichero .env"
         ),
     )
     args = parser.parse_args(argv)
@@ -194,6 +194,11 @@ def main(argv=None):
                 f"'{direccion}' no parece una dirección de correo "
                 "(si usas -e sin dirección, ponlo después de las tablas)."
             )
+
+    # Con -e, los datos del correo se comprueban antes de generar nada: si
+    # falta el .env o algún dato, el programa se corta sin crear el PDF ni
+    # gastar una tabla de la rotación.
+    envio = preparar_envio(direcciones) if args.email is not None else None
 
     tablas = parsear_tablas(args.tablas, parser)
 
@@ -210,8 +215,8 @@ def main(argv=None):
     mostrar_salida(lineas, tabla, NUMEROS_VALIDOS, ruta_pdf)
     guardar_tablas_salidas(salidas)
 
-    if args.email is not None:
-        enviar_pdf(direcciones, ASUNTO_EMAIL, TEXTO_EMAIL, ruta_pdf)
+    if envio is not None:
+        enviar_pdf(*envio, ASUNTO_EMAIL, TEXTO_EMAIL, ruta_pdf)
 
 
 if __name__ == "__main__":

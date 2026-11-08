@@ -2,8 +2,8 @@
 """Servidor web mínimo para generar la hoja de multiplicaciones desde el navegador.
 
 Sirve `index.html` y, al pulsar el botón "Generar", ejecuta
-`multiplicaciones.py -e` (genera el PDF y lo envía a los DESTINATARIOS
-por defecto de `enviar_email.py`).
+`multiplicaciones.py -e` (genera el PDF y lo envía a los DESTINATARIOS del
+fichero .env).
 
 Uso:
     env/bin/python servidor.py            # escucha en el puerto 8000
